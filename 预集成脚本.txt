@@ -1,0 +1,27 @@
+repo start base --all
+
+1.第一次依据 codereview条件查询提交集合 result
+
+2.新建list=[] ,解析上面的result，拿出每一个提交 i 看看是不是有topic
+ 如果没有topic 就list.append([i,])
+ 
+ 如果有topic，重新按照这个topic作为条件进行查询，查询到提交整体作为一个list1
+ list.append(list1)
+ 
+3.遍历 list 进行拖提交
+
+ 依据本组 提交本地路径，
+ 进入本组每个path
+ 新建 git checkout cpbranch1 
+ 然后cherry-pick 提交
+ 如果这批提交 都cherry-pick成功，就继续下一组提交，
+ 如果有任意一个提交cherry-pick失败了，就将这几个新建cpbranch1的仓库 git  cherry-pick --abort,然后 git checkout base
+ 
+ 依据本组 提交本地路径，
+ 进入本组每个path
+ 新建 cpbranch2
+ 然后cherry-pick 提交
+ 如果这批提交 都cherry-pick成功，就继续下一组提交,
+ 如果有任意一个提交cherry-pick失败了，就将这几个新建cpbranch2的仓库 git  cherry-pick --abort,然后 git checkout cpbranch1
+ 
+ 依次类推。。。。。。。
