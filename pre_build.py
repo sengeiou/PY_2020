@@ -6,58 +6,74 @@ import subprocess
 import os
 import sys
 import json
-import getopt
+import re
 
-dir_name="/home/ubuntu/SM4250/SM4250"
-#字典1：存放name
+root_dir=os.getcwd()
 dict1={}
-#字典2：存放ref
-dict2={}
-#字典3：存放path
-dict3={}
-args_list=sys.argv
+list1=[]	
+list2=[]
+list3=[]
+#存放topic提交的列表
+t_list=[]
 
-def do_progress(PORT,HOST,BRANCH_NAME,PROJECT_NAME):
-	#进入到代码目录
-	os.chdir(dir_name)
-	#得到此项目open提交
-	sshcmd="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH_NAME+" project:"+PROJECT_NAME+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
-	child = subprocess.Popen(sshcmd,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	child.wait()
-	#读取open提交内容
-	global context
-	context=child.stdout.readlines()
-	#遍历读取的内容，并提取有效信息，存入字典
-	for p in context:
-		project1=json.loads(p).get("project")
-		dict1["name"]=project1
-		refs=json.loads(p).get("currentPatchSet").get("ref")
-		dict2["ref"]=refs
-
-		#根据name得到本地对应的path
-		sshcmd2="repo list "+project1+" -p"
-		child2=subprocess.Popen(sshcmd2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		child2.wait()
-		path1=child2.stdout.readline().replace("\n","")
-		dict3["path"]=path1
-		#存放cherry-pick的信息
-		list1=[dict1,dict2,dict3]
-
-		#定义全局的path,name,ref
-		global path_dir
-		global name
-		global change_url
-		path_dir=list1[2].get("path")
-		name=list1[0].get("name")
-		change_url=list1[1].get("ref")
+def pull_code(PROT,HOST,BRANCH):
+	if os.path.isdir("4250_code"):
+		print("代码目录存在")
+		os.system("rm -rf 4250_code")
+		os.mkdir("4250_code")
+		os.chdir(root_dir+"/4250_code")
+		cmd1="repo init -u ssh://"+HOST+":"+PORT+"/manifest -m manifest.xml -b"+BRANCH
+		ret1=subprocess.Popen(cmd1,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		ret1.wait()
+		cmd2="repo sync"
+		ret2=subprocess.Popen(cmd2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		ret2.wait()
+		cmd3="repo start base --all"
+		ret3=subprocess.Popen(cmd3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		ret3.wait()
 
 
-		#进行cherry-pick操作
-		do_cherry_pick(USER)
+#cherry-pick前进行信息提取操作
+def do_progress(PORT,HOST,BRANCH,PROJECT):
+	pull_code(PORT,HOST,BRANCH)	
+
+	#1:查询所有open的提交形成list1
+	sshcmd1="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH+" project:"+PROJECT+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
+	child1 = subprocess.Popen(sshcmd1,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	child1.wait()
+	list1=child1.stdout.readlines()
+
+	#2：查询所有topic存放进list2
+	for p in list1:
+		topic=json.loads(p).get("topic")
+		if not topic is None:
+			list2.append(topic)
+		else:
+			list3.append(p)
+
+	#3：遍历topic列表，将相同topic的提交存放同一个list
+	for topic in list2:
+		list_temp= get_same_topic_change(topic)
+		list3.append(list_temp)
+
+	#去除重复
+	for i in list3:
+		if i not in t_list:
+			t_list.append(i)
+
+#查询相同topic的提交函数
+def get_same_topic_change(topic):
+	sshcmd2="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH+" project:"+PROJECT+" topic:"+topic+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
+	child2=subprocess.Popen(sshcmd2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	child2.wait()
+	list_temp=child2.stdout.readlines()
+	return list_temp
+			
 
 def do_cherry_pick(USER):
+	#path_dir=
 	#进入本地path目录，进行cherry-pick
-	os.chdir(dir_name+"/"+path_dir)
+	os.chdir(root_dir+"/4250_code/"+path_dir)
 	sshcmd3="git fetch ssh://"+USER+"@"+HOST+":"+PORT+"/"+name+" "+change_url+" "+"&&"+" git cherry-pick FETCH_HEAD"
 	child3 = subprocess.Popen(sshcmd3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	child3.wait()
@@ -72,35 +88,22 @@ def do_cherry_pick(USER):
 		print("cherry-pick失败！")
 
 def usage():
-	print("参数的使用示例")
-
-def args_parse():
-	print("START TO PARSE ARGS")
-	args = getopt.getopt(args_list[1:],"h",["port","host","branch_name","project_name","user"])
-	print(args)
-	for key,value in opts:
-		if key == "-h":
-			usage()
-		elif key == "--port":
-			PORT=value
-		elif key == "--host":	
-			HOST=value
-		elif key == "--branch_name":
-			BRANCH_NAME=value
-		elif key == "--project_name":
-			PROJECT_NAME=value
-		elif key == "--user":
-			USER=value
+	print("="*120)
+	print('argv[1]:gerrit port')
+	print('argv[2]:gerrit ip')
+	print('argv[3]:branch name')
+	print('argv[4]:project name,for example:^alps/.*')
+	print('argv[5]:gerrit user')
+	print('='*120)
 
 ##############################################3
 if __name__=="__main__":
-	if len(sys.argv) < 5:
-		usage()
-	else:
-		PORT=sys.argv[1]
-		HOST=sys.argv[2]
-		PROJECT_NAME=sys.argv[3]
-		BRANCH_NAME=sys.argv[4]
-		USER=sys.argv[5]
-		args_parse()
-		#do_progress(PORT,HOST,BRANCH_NAME,PROJECT_NAME)
+	PORT=sys.argv[1]
+	HOST=sys.argv[2]
+	BRANCH=sys.argv[3]
+	PROJECT=sys.argv[4]
+	USER=sys.argv[5]
+
+	pull_code(PORT,HOST,BRANCH)
+	do_progress(PORT,HOST,BRANCH,PROJECT)
+	#do_cherry_pick(USER)	

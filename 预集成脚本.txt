@@ -1,11 +1,19 @@
-repo start base --all
+1：代码拖下来后所有仓库新建base分支：repo start base --all
 
-1.第一次依据 codereview条件查询提交集合 result
+2.第一次依据 codereview+2 条件查询提交集合 result（只有codeReview+2的提交我们才拖下来编译）
+
+3：查询所有提交生成list1
+
+4：遍历list1查询所有topic生成list2（存放所有topic的列表）
+
+5：遍历list2,查询单个topic的提交，将相关topic的提交归为一个列表中
+
+
 
 2.新建list=[] ,解析上面的result，拿出每一个提交 i 看看是不是有topic
  如果没有topic 就list.append([i,])
  
- 如果有topic，重新按照这个topic作为条件进行查询，查询到提交整体作为一个list1
+ 如果有topic，重新按照这个topic作为条件进行查询，查询到提交整体作为一个list1（相同topic提交的）
  list.append(list1)
  
 3.遍历 list 进行拖提交
@@ -25,3 +33,41 @@ repo start base --all
  如果有任意一个提交cherry-pick失败了，就将这几个新建cpbranch2的仓库 git  cherry-pick --abort,然后 git checkout cpbranch1
  
  依次类推。。。。。。。
+ 
+ 
+==============================================
+Y²C_18001855416:
+1.查提交 生成 list1
+
+随玉而安:
+get
+
+Y²C_18001855416:
+2.遍历 list1 查找 每个提交的topic
+
+随玉而安:
+get
+
+Y²C_18001855416:
+写个函数，专门用来返回单个提交 topic值的
+
+Y²C_18001855416:
+有topic就返回topic ,没有就返回""
+
+Y²C_18001855416:
+新建一个list2 存放 topic
+
+Y²C_18001855416:
+3.遍历 包含topic的list2  
+
+Y²C_18001855416:
+有topic的查询一下 topic包含的所有提交，写到 list3 里，没有topic的 就把list1[下表] 的changenuber 值直接写到 list3中
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
