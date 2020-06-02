@@ -9,14 +9,14 @@ import json
 import re
 
 root_dir=os.getcwd()
-dict1={}
 list1=[]	
 list2=[]
 list3=[]
-#存放topic提交的列表
+#存放所有提交的列表
 t_list=[]
+dict1={}
 
-def pull_code(PROT,HOST,BRANCH):
+def pull_code():
 	if os.path.isdir("4250_code"):
 		print("代码目录存在")
 		os.system("rm -rf 4250_code")
@@ -34,8 +34,8 @@ def pull_code(PROT,HOST,BRANCH):
 
 
 #cherry-pick前进行信息提取操作
-def do_progress(PORT,HOST,BRANCH,PROJECT):
-	pull_code(PORT,HOST,BRANCH)	
+def do_progress():
+	#pull_code(PORT,HOST,BRANCH)	
 
 	#1:查询所有open的提交形成list1
 	sshcmd1="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH+" project:"+PROJECT+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
@@ -45,47 +45,82 @@ def do_progress(PORT,HOST,BRANCH,PROJECT):
 
 	#2：查询所有topic存放进list2
 	for p in list1:
+		change_number=json.loads(p).get("number")
+		dict1[change_number]=p
 		topic=json.loads(p).get("topic")
 		if not topic is None:
 			list2.append(topic)
 		else:
-			list3.append(p)
+			list3.append([change_number])
 
-	#3：遍历topic列表，将相同topic的提交存放同一个list
+	#3：遍历topic列表，将相同topic的提交number存放同一个list,形成list3
 	for topic in list2:
 		list_temp= get_same_topic_change(topic)
 		list3.append(list_temp)
+		
 
-	#去除重复
+	#去除重复,形成最终t_list
 	for i in list3:
 		if i not in t_list:
 			t_list.append(i)
+
 
 #查询相同topic的提交函数
 def get_same_topic_change(topic):
 	sshcmd2="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH+" project:"+PROJECT+" topic:"+topic+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
 	child2=subprocess.Popen(sshcmd2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 	child2.wait()
-	list_temp=child2.stdout.readlines()
+	ret1=child2.stdout.readlines()
+	list_temp=[]
+	for i in ret1:
+		change_number=json.loads(i).get("number")
+		list_temp.append(change_number)
 	return list_temp
 			
+#遍历t_list,进行拖提交
+def get_info():
+	for i in t_list:
+		for number in i:
+			do_cherry_pick(number)
+		
+#拖提交函数
+def do_cherry_pick(number):
+	os.chdir(root_dir+"/4250_code")
+	print("\033[0;34m%s\033[0m" % "="*100)
+	print('开始拖提交啦 ！')
+	print("\033[0;34m%s\033[0m" % "="*100)
+	for change_number in dict1:
+		line=dict1[change_number]
+		NAME=json.loads(line).get("project")
+		CHANGE_URL=json.loads(line).get("currentPatchSet").get("ref")
+		s1="repo list "+NAME+" -p"
+		print(s1)
+		c1=subprocess.Popen(s1,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		c1.wait()
+		PATH_DIR=c1.stdout.readline().replace("\n","")
+	
+		#进入本地path目录，进行cherry-pick
+		os.chdir(root_dir+"/4250_code/"+PATH_DIR)
+		s2="git checkout -b "+branch1
+		c2=subprocess.Popen(s2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		c2.wait()
+		s3="git fetch ssh://"+USER+"@"+HOST+":"+PORT+"/"+NAME+" "+CHANGE_URL+" "+"&&"+" git cherry-pick FETCH_HEAD"
+		c3=subprocess.Popen(s3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		c3.wait()
 
-def do_cherry_pick(USER):
-	#path_dir=
-	#进入本地path目录，进行cherry-pick
-	os.chdir(root_dir+"/4250_code/"+path_dir)
-	sshcmd3="git fetch ssh://"+USER+"@"+HOST+":"+PORT+"/"+name+" "+change_url+" "+"&&"+" git cherry-pick FETCH_HEAD"
-	child3 = subprocess.Popen(sshcmd3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-	child3.wait()
-	print(child3.stdout.read())
-
-	returncode=child3.returncode
-	if returncode == 0:
-		return True
-		print("cherry-pick成功！")
-	else:
-		return False
-		print("cherry-pick失败！")
+		returncode=child3.returncode
+		if returncode == 0:
+			return True
+			print("cherry-pick成功！")
+		else:
+			return False
+			print("cherry-pick失败！")
+			s4="git  cherry-pick --abort"
+			c4=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			c4.wait()
+			s5="git checout "+branch
+			c5=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			c5.wait()
 
 def usage():
 	print("="*120)
@@ -104,6 +139,5 @@ if __name__=="__main__":
 	PROJECT=sys.argv[4]
 	USER=sys.argv[5]
 
-	pull_code(PORT,HOST,BRANCH)
-	do_progress(PORT,HOST,BRANCH,PROJECT)
-	#do_cherry_pick(USER)	
+	do_progress()
+	get_info()
