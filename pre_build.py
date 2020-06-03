@@ -8,12 +8,16 @@ import sys
 import json
 import re
 
+reload(sys)
+sys.setdefaultencoding('utf8')
+
 root_dir=os.getcwd()
 list1=[]	
 list2=[]
 list3=[]
 #存放所有提交的列表
 t_list=[]
+#存放以change_number为key,提交信息为value的字典列表
 dict1={}
 
 def pull_code():
@@ -35,7 +39,7 @@ def pull_code():
 
 #cherry-pick前进行信息提取操作
 def do_progress():
-	#pull_code(PORT,HOST,BRANCH)	
+	#pull_code()	
 
 	#1:查询所有open的提交形成list1
 	sshcmd1="ssh -p "+str(PORT)+" "+HOST+" "+" gerrit query "+"branch:"+BRANCH+" project:"+PROJECT+" status:open --format JSON --current-patch-set --files | grep -E 'project|number|url'"
@@ -43,15 +47,16 @@ def do_progress():
 	child1.wait()
 	list1=child1.stdout.readlines()
 
+
 	#2：查询所有topic存放进list2
 	for p in list1:
 		change_number=json.loads(p).get("number")
-		dict1[change_number]=p
 		topic=json.loads(p).get("topic")
 		if not topic is None:
 			list2.append(topic)
 		else:
 			list3.append([change_number])
+		dict1[change_number]=p
 
 	#3：遍历topic列表，将相同topic的提交number存放同一个list,形成list3
 	for topic in list2:
@@ -79,48 +84,46 @@ def get_same_topic_change(topic):
 			
 #遍历t_list,进行拖提交
 def get_info():
-	for i in t_list:
-		for number in i:
-			do_cherry_pick(number)
+	for subnumber in t_list:
+		count=1
+		for number in subnumber:
+			do_cherry_pick(number,count)
 		
 #拖提交函数
-def do_cherry_pick(number):
+def do_cherry_pick(number,count):
 	os.chdir(root_dir+"/4250_code")
-	print("\033[0;34m%s\033[0m" % "="*100)
-	print('开始拖提交啦 ！')
-	print("\033[0;34m%s\033[0m" % "="*100)
-	for change_number in dict1:
-		line=dict1[change_number]
-		NAME=json.loads(line).get("project")
-		CHANGE_URL=json.loads(line).get("currentPatchSet").get("ref")
-		s1="repo list "+NAME+" -p"
-		print(s1)
-		c1=subprocess.Popen(s1,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		c1.wait()
-		PATH_DIR=c1.stdout.readline().replace("\n","")
+	line=dict1[number]
+	NAME=json.loads(line).get("project")
+	CHANGE_URL=json.loads(line).get("currentPatchSet").get("ref")
+	s1="repo list "+NAME+" -p"
+	c1=subprocess.Popen(s1,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	c1.wait()
+	PATH_DIR=c1.stdout.readline().replace("\n","")
+	BRANCH_NAME="branch"+str(count)		
 	
-		#进入本地path目录，进行cherry-pick
-		os.chdir(root_dir+"/4250_code/"+PATH_DIR)
-		s2="git checkout -b "+branch1
-		c2=subprocess.Popen(s2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		c2.wait()
-		s3="git fetch ssh://"+USER+"@"+HOST+":"+PORT+"/"+NAME+" "+CHANGE_URL+" "+"&&"+" git cherry-pick FETCH_HEAD"
-		c3=subprocess.Popen(s3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-		c3.wait()
+	#进入本地path目录，进行cherry-pick
+	os.chdir(root_dir+"/4250_code/"+PATH_DIR)
+	s2="git checkout -b "+BRANCH_NAME
+	c2=subprocess.Popen(s2,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	c2.wait()
+	s3="git fetch ssh://"+USER+"@"+HOST+":"+PORT+"/"+NAME+" "+CHANGE_URL+" "+"&&"+" git cherry-pick FETCH_HEAD"
+	c3=subprocess.Popen(s3,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+	c3.wait()
 
-		returncode=child3.returncode
-		if returncode == 0:
-			return True
-			print("cherry-pick成功！")
-		else:
-			return False
-			print("cherry-pick失败！")
-			s4="git  cherry-pick --abort"
-			c4=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			c4.wait()
-			s5="git checout "+branch
-			c5=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-			c5.wait()
+	returncode=c3.wait()
+	if returncode == 0:
+		count+=1
+		print(NAME+":cherry-pick成功！")
+		return True
+	else:
+		print(NAME+":cherry-pick失败！")
+		return False
+		#s4="git  cherry-pick --abort"
+		#c4=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		#c4.wait()
+		#s5="git checout "+BRANCH_NAME
+		#c5=subprocess.Popen(s4,shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+		#c5.wait()
 
 def usage():
 	print("="*120)
