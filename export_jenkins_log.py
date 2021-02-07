@@ -4,7 +4,7 @@
 import jenkins
 import requests
 
-jenkin_url="http://jenkins.mot.com"
+jenkins_url="http://jenkins.mot.com"
 username="gaoyx9"
 password="gyx050400??"
 job_name="QZB30.Q4_borneo-retail_userdebug_mq-2020-q4_r-qsm2020_test-keys_continuous"
